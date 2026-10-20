@@ -20,44 +20,34 @@
 /* ============================================================
  *  Part A：文件基础
  * ============================================================ */
-
-/* A1. 读取整个文件 */
-char*file_read_all (const char *path, int *out_len)
+char *file_read_all(const char *path, int *out_len)
 {
-    (void)path;
-    (void)out_len;
-    typedef struct{
-        int size;
-        char* data;
-        int capacity;
-    }da;
-    FILE* p=fopen(path,"r");
-    if(p==NULL)
+    FILE *fp = fopen(path, "r");
+    if (fp == NULL) return NULL;
+
+    int cap = 64, size = 0;
+    char *buf = (char *)malloc(cap);
+    if (buf == NULL) { fclose(fp); return NULL; }
+
+    int c;
+    while ((c = fgetc(fp)) != EOF)     
     {
-        return NULL;
-    }
-    char ch;
-    da* a;
-    a->data=malloc(64*sizeof(char));
-    a->size=0;
-    a->capacity=64;
-    while(1)
-    {
-        ch=fgetc(p);
-        if(ch==EOF)
+        if (size + 1 >= cap)            
         {
-            break;
+            int newcap = cap * 2;
+            char *tmp = (char *)realloc(buf, newcap);
+            if (tmp == NULL) { free(buf); fclose(fp); return NULL; }
+            buf = tmp;                 
+            cap = newcap;
         }
-        a->data[a->size]=ch;
-        a->size++;
-        if(a->size==a->capacity)
-        {
-            realloc(a->data,sizeof(char)*2*a->capacity);
-            a->capacity=2*a->capacity;
-        }
+        buf[size++] = (char)c;
     }
-    fclose(p);
-    return a->data;
+    buf[size] = '\0';                   
+    fclose(fp);
+
+    if (out_len != NULL) *out_len = size;   
+    return buf;
+}
     /* TODO:
        1. FILE *fp = fopen(path, "r");
           if (fp == NULL) return NULL;
@@ -83,14 +73,19 @@ char*file_read_all (const char *path, int *out_len)
        ⚠️ 所有失败路径都要 fclose + free 已申请的内存
        ⚠️ fgetc 的返回值要用 int 接，不能写 char c
     */
-    return NULL;
-}
+
 
 /* A2. 写文件 */
 int file_write_all(const char *path, const char *content)
 {
-    (void)path;
-    (void)content;
+    FILE* fp=fopen(path,"w");
+    if(fp==NULL)
+    {
+        return 0;
+    }
+    fputs(content,fp);
+    int ok=(fclose(fp)==0);
+    return ok;
     /* TODO:
        1. FILE *fp = fopen(path, "w");     ← "w" 是覆盖写
           if (fp == NULL) return 0;
@@ -104,15 +99,21 @@ int file_write_all(const char *path, const char *content)
 /* A3. 复制文件 */
 int file_copy(const char *src, const char *dst)
 {
-    (void)src;
-    (void)dst;
+    char* a=file_read_all(src,0);
+    if(a==NULL)
+    {
+        return 0;
+    }
+    file_write_all(dst,a);
+    free(a);
+
     /* TODO:
        方法 1（简单粗暴）：用你写的 file_read_all + file_write_all
        方法 2（更专业）：一块一块地读（比如每次 1024 字节）
        建议先用方法 1，做完再想想方法 2 的好处（大文件不会撑爆内存）
        ⚠️ 记得释放 file_read_all 返回的指针
     */
-    return 0;
+    return 1;
 }
 
 
@@ -123,8 +124,44 @@ int file_copy(const char *src, const char *dst)
 /* B1. 统计文件 */
 int file_stats(const char *path, FileStats *out)
 {
-    (void)path;
-    (void)out;
+    FILE* fp=fopen(path,"r");
+    if(out==NULL)
+    {
+        return 0;
+    }
+    if(fp==NULL)
+    {
+        return 0;
+    }
+    int lines=0,words=0,chars=0,last=-1,in_word=0;
+    int c;
+    while((c=fgetc(fp))!=EOF)
+    {
+        chars++;
+        if(c=='\n')
+        {
+            lines++;
+        }
+        if(c==' '||c=='\t'||c=='\r'||c=='\f'||c=='\v'||c=='\n')
+        {
+            in_word=0;
+        }
+        else{
+            if(in_word==0)
+            {
+                words++;
+                in_word=1;
+            }
+        }
+        last=c;
+    }
+    if(chars>0&&last!='\n')
+    {lines++;}
+    fclose(fp);
+    out->lines=lines;
+    out->words=words;
+    out->chars=chars;
+
     /* TODO:
        FILE *fp = fopen(path, "r");
        if (fp == NULL || out == NULL) { if (fp) fclose(fp); return 0; }
@@ -153,7 +190,7 @@ int file_stats(const char *path, FileStats *out)
        out->lines = lines;  out->words = words;  out->chars = chars;
        return 1;
     */
-    return 0;
+    return 1;
 }
 
 
@@ -166,16 +203,68 @@ int file_stats(const char *path, FileStats *out)
 /* C1. 创建空单词表 */
 WordList *wl_create(void)
 {
+    WordList* p=malloc(sizeof(WordList));
+    if(p==NULL)
+    {
+        return NULL;
+    }
+      p->size=0;
+     p->capacity=WL_INIT_CAPACITY;
+     p->items=malloc(sizeof(WordCount)*WL_INIT_CAPACITY);
+    if(p->items==NULL)
+    {
+        return NULL;
+    }
     /* TODO: 和 da_create 一样（两次 malloc、都判空、初始容量 4）
        ⚠️ items 是 WordCount 数组，malloc 的大小是 4 * sizeof(WordCount) */
-    return NULL;
+    return p;
 }
 
 /* C2. 添加单词 */
+int my_strcmp(char* a,char* b)
+{int s;
+    for(int i=0,j=0;a[i]!='\0'&&b[j]!='\0';j++,i++)
+    {
+        if((a[i]-'0')-(b[j]-'0')!=0)
+        {
+            s=(a[i]-'0')-(b[j]-'0'!);
+            return s;
+        }
+    }
+    s=(a[i]-'0')-(b[j]-'0'!);
+    return s
+}
 void wl_add(WordList *wl, const char *word)
 {
     (void)wl;
     (void)word;
+    int i=0;
+    for(;i<wl->size;i++)
+    {
+        if(my_strcmp(word,wl->items[i]->word)==0)
+        {
+            wl->items[i]->count++;
+            return;
+        }
+    }
+    if(i==wl->size-1)
+    {
+        new=wl->capacity*2;
+        WordCount *temp=realloc(wl->items,sizeof(WordCount)*new);
+        if(temp==NULL)
+        {
+            return;
+        }
+        wl->capacity*=2;
+        wl->size++;
+        for(int j=0;word[j]!='\0';j++)
+        {
+            wl->items[wl->size]->word[j]=word[j];
+        }
+        wl->items[wl->size]->word[j]='\0';
+        wl->items[wl->size]->count=1;
+    }
+
     /* TODO:
        1. 先找：遍历 items，用 strcmp 比较 word。
           如果找到 → items[i].count++;  return;

@@ -58,45 +58,91 @@ int main(void)
     printf("  Part A：文件基础\n");
     printf("==================================================\n");
 
-    /* ---------------- A1. file_write_all + file_read_all ---------------- */
-    printf("\n---------- A1. 写入 + 读取 ----------\n");
+    /* ---------------- A1. file_write_all（独立测试，用标准库读回来验证）---------------- */
+    printf("\n---------- A1. file_write_all（写文件）----------\n");
     {
-        const char *path = "_t_a1.txt";
-        int len = -1;
-        char *got;
+        const char *path = "_t_w.txt";
+        char raw[256];
+        long rd;
 
         CHECK(file_write_all(path, "hello world") == 1, "写入 \"hello world\" 返回 1");
 
+        /* ★ 用【标准库】读回来验证，不依赖 file_read_all */
+        rd = -1;
+        {
+            FILE *fp = fopen(path, "rb");
+            if (fp != NULL) {
+                rd = (long)fread(raw, 1, sizeof(raw) - 1, fp);
+                fclose(fp);
+                if (rd >= 0) raw[rd] = '\0';
+            }
+        }
+        CHECK(rd == 11 && strcmp(raw, "hello world") == 0, "文件里确实是 \"hello world\"");
+
+        CHECK(file_write_all(path, "") == 1, "写入空字符串返回 1");
+        rd = -1;
+        {
+            FILE *fp = fopen(path, "rb");
+            if (fp != NULL) {
+                rd = (long)fread(raw, 1, sizeof(raw) - 1, fp);
+                fclose(fp);
+                if (rd >= 0) raw[rd] = '\0';
+            }
+        }
+        CHECK(rd == 0, "空字符串写入后文件是空的");
+
+        remove(path);
+    }
+
+    /* ---------------- A2. file_read_all（独立测试，用标准库造文件）---------------- */
+    printf("\n---------- A2. file_read_all（读文件）----------\n");
+    {
+        const char *path = "_t_r.txt";
+        int len = -1;
+        char *got;
+
+        /* ★ 用【标准库】造文件，不依赖 file_write_all */
+        make_file(path, "hello world");
         got = file_read_all(path, &len);
         CHECK(got != NULL, "读回来不是 NULL");
         if (got != NULL) {
-            CHECK(strcmp(got, "hello world") == 0, "读回的内容一致");
+            CHECK(strcmp(got, "hello world") == 0, "内容一致");
             CHECK(len == 11, "长度是 11");
             free(got);
         } else {
-            CHECK(0, "读回的内容一致（读失败，跳过）");
+            CHECK(0, "内容一致（读失败，跳过）");
             CHECK(0, "长度是 11");
         }
 
-        /* 空文件 */
-        CHECK(file_write_all(path, "") == 1, "写入空字符串");
+        make_file(path, "");
         got = file_read_all(path, &len);
         CHECK(got != NULL && got[0] == '\0', "读空文件 -> 空字符串");
         CHECK(len == 0, "空文件长度 0");
         if (got != NULL) free(got);
 
-        /* 多行 */
-        file_write_all(path, "line1\nline2\nline3");
+        make_file(path, "line1\nline2\nline3");
         got = file_read_all(path, &len);
-        CHECK(got != NULL && strcmp(got, "line1\nline2\nline3") == 0, "多行内容读回一致");
+        CHECK(got != NULL && strcmp(got, "line1\nline2\nline3") == 0, "多行内容一致");
         CHECK(len == 17, "多行长度 17");
         if (got != NULL) free(got);
+
+        /* 超过 64 字节，验证扩容 */
+        {
+            char big[300];
+            for (int i = 0; i < 250; i++) big[i] = (char)('a' + i % 26);
+            big[250] = '\0';
+            make_file(path, big);
+            got = file_read_all(path, &len);
+            CHECK(got != NULL && strcmp(got, big) == 0, "250 字符（触发扩容）内容一致");
+            CHECK(len == 250, "250 字符长度正确");
+            if (got != NULL) free(got);
+        }
 
         remove(path);
     }
 
-    /* ---------------- A2. file_read_all 失败情况 ---------------- */
-    printf("\n---------- A2. 读取失败的情况 ----------\n");
+    /* ---------------- A3. file_read_all 失败情况 ---------------- */
+    printf("\n---------- A3. 读取失败的情况 ----------\n");
     {
         int len = 999;
         char *got = file_read_all("_这个文件不存在_.txt", &len);
@@ -106,8 +152,8 @@ int main(void)
         CHECK(got == NULL, "out_len 传 NULL 也不崩");
     }
 
-    /* ---------------- A3. file_copy ---------------- */
-    printf("\n---------- A3. file_copy（复制文件）----------\n");
+    /* ---------------- A4. file_copy ---------------- */
+    printf("\n---------- A4. file_copy（复制文件）----------\n");
     {
         const char *src = "_t_src.txt";
         const char *dst = "_t_dst.txt";
