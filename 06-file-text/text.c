@@ -221,50 +221,57 @@ WordList *wl_create(void)
 }
 
 /* C2. 添加单词 */
-int my_strcmp(char* a,char* b)
+int my_strcmp(const char* a,const char* b)
 {int s;
-    for(int i=0,j=0;a[i]!='\0'&&b[j]!='\0';j++,i++)
+    int j=0,i=0;
+    for(;a[i]!='\0'&&b[j]!='\0';j++,i++)
     {
-        if((a[i]-'0')-(b[j]-'0')!=0)
+        s=a[i]-b[j];
+        if(a[i]-b[j]!=0)
         {
-            s=(a[i]-'0')-(b[j]-'0'!);
             return s;
         }
     }
-    s=(a[i]-'0')-(b[j]-'0'!);
-    return s
+    s=a[i]-b[j];
+    return s;
+}
+char *my_strcpy(char *dest, const char *src)
+{
+    int i=0;
+    for(;src[i]!='\0';i++)
+    {
+        dest[i]=src[i];
+    }
+    if(src[i]=='\0')
+    {
+        dest[i]='\0';
+    }
+    return dest;
 }
 void wl_add(WordList *wl, const char *word)
 {
-    (void)wl;
-    (void)word;
-    int i=0;
-    for(;i<wl->size;i++)
+    for(int i=0;i<wl->size;i++)
     {
-        if(my_strcmp(word,wl->items[i]->word)==0)
+        if(my_strcmp(word,wl->items[i].word)==0)
         {
-            wl->items[i]->count++;
+            wl->items[i].count++;
             return;
         }
     }
-    if(i==wl->size-1)
+    if(wl->size==wl->capacity)
     {
+        int new=0;
         new=wl->capacity*2;
         WordCount *temp=realloc(wl->items,sizeof(WordCount)*new);
         if(temp==NULL)
         {
             return;
         }
-        wl->capacity*=2;
+        wl->items=temp;
+        wl->capacity*=2;}
+        my_strcpy(wl->items[wl->size].word,word);
+        wl->items[wl->size].count=1;
         wl->size++;
-        for(int j=0;word[j]!='\0';j++)
-        {
-            wl->items[wl->size]->word[j]=word[j];
-        }
-        wl->items[wl->size]->word[j]='\0';
-        wl->items[wl->size]->count=1;
-    }
-
     /* TODO:
        1. 先找：遍历 items，用 strcmp 比较 word。
           如果找到 → items[i].count++;  return;
@@ -281,8 +288,35 @@ void wl_add(WordList *wl, const char *word)
 /* C3. 把文本切分成单词 */
 void wl_count_text(WordList *wl, const char *text)
 {
-    (void)wl;
-    (void)text;
+    char buf[WORD_MAX];
+    int len=0;
+    if(wl==NULL||text==NULL)
+    {
+        return;
+    }
+    for(int i=0;;i++)
+    {
+        char ch=text[i];
+if(ch=='\0'||ch==' '||ch=='\t'||ch=='\r'||ch=='\f'||ch=='\v'||ch=='\n')
+{
+    if(len>0)
+    {
+buf[len]='\0';
+wl_add(wl,buf);
+len=0;
+}
+if(ch=='\0')
+{
+    break;
+}
+}
+else
+{
+    if(len<WORD_MAX-1)
+    {
+        buf[len++]=ch;
+    }
+}
     /* TODO:
        用一个 char buf[WORD_MAX] 当"临时单词"，
        遍历 text：
@@ -291,14 +325,56 @@ void wl_count_text(WordList *wl, const char *text)
        循环结束后，buf 里可能还有最后一个单词 → 别忘了 wl_add
     */
 }
+}
 
 /* C4. 按次数排序 */
+int my_strcmp2(const char* a,const char* b)
+{
+    while(*a!='\0'&&*a-*b==0)
+    {
+        a++;
+        b++;
+        if(*a-*b!=0)
+        {
+            return *a-*b;
+        }
+        
+    }
+    return *a-*b;
+}
 void wl_sort(WordList *wl)
 {
-    (void)wl;
+    for(int j=0;j<wl->size;j++)
+    {
+        for(int i=0;i<wl->size-j-1;i++)
+        {
+            if(wl->items[i].count<wl->items[i+1].count)
+            {
+            WordCount s=wl->items[i];
+            wl->items[i]=wl->items[i+1];
+            wl->items[i+1]=s;
+            }
+            if(wl->items[i].count==wl->items[i+1].count)
+            {
+                int s=my_strcmp2(wl->items[i].word,wl->items[i+1].word);
+                if(s>0)
+                {
+            WordCount s=wl->items[i];
+            wl->items[i]=wl->items[i+1];
+            wl->items[i+1]=s;
+                }
+            }
+        }
+    }
     /* TODO: 冒泡排序
        for (int i = 0; i < wl->size - 1; i++)
-           for (int j = 0; j < wl->size - 1 - i; j++)
+           for (int j = 0; j < wl->size - 1 - i; j++)int s=my_strcmp2(wl->items[i].word,wl->items[i+1].word);
+        if(s<0)
+        {
+            WordCount s=wl->items[i];
+            wl->items[i]=wl->items[i+1];
+            wl->items[i+1]=s;
+        }
                if (需要交换) { 交换 items[j] 和 items[j+1] }
        ⚠️ 交换的是整个 WordCount 结构体（含 word 数组 + count）
           不能只交换指针——items 是结构体数组，不是指针数组
@@ -310,8 +386,14 @@ void wl_sort(WordList *wl)
 /* C5. 打印前 n 名 */
 void wl_print_top(WordList *wl, int n)
 {
-    (void)wl;
-    (void)n;
+    for(int i=0;i<n;i++)
+    {
+        for(int j=0;wl->items[i].word[j]!='\0';j++)
+        {
+            printf("%c",wl->items[i].word[j]);
+        }
+        printf("\n");
+    }
     /* TODO:
        要打印的个数 = min(n, wl->size)
        格式：printf("%4d. %-12s %4d\n", i+1, wl->items[i].word, wl->items[i].count);
@@ -322,6 +404,11 @@ void wl_print_top(WordList *wl, int n)
 /* C6. 释放 */
 void wl_free(WordList *wl)
 {
-    (void)wl;
+    if(wl==NULL)
+    {
+        return ;
+    }
+    free(wl->items);
+    free(wl);
     /* TODO: if (wl == NULL) return;  free(wl->items);  free(wl); */
 }
